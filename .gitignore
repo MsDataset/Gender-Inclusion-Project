@@ -1,0 +1,28 @@
+# ignore environment variables file 
+.env
+.env.example is tracked
+.venv/
+venv/
+
+# Debugging and output files
+check_columns.py
+check_db.py
+clear_db.py
+diagnose_data.py
+output*.log
+output*.txt
+test_utf.log
+
+# Byte-compiled /optimized /DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution/packaging
+build/
+dist/
+*.egg-info/
+
+# os files
+.DS_Store
+Thumbs.db
