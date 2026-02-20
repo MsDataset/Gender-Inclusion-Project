@@ -178,7 +178,8 @@ if "Date" in df.columns:
 def split_options(cell_value):
     """
     Dynamically splits multi-select values from Kobo exports.
-    Handles commas, semicolons, spaces, or mixed separators.
+    Handles commas, semicolons, or mixed separators.
+    Note: If no delimiter is found, returns the entire value as a single option.
     """
     if pd.isna(cell_value):
         return []
@@ -190,13 +191,11 @@ def split_options(cell_value):
     elif ';' in value_str:
         sep = ';'
     else:
-        sep = None
+        # No clear delimiter found - return the entire value as one option
+        # This prevents splitting multi-word options on whitespace
+        return [value_str] if value_str else []
     
-    if sep:
-        parts = [part.strip() for part in value_str.split(sep)]
-    else:
-        parts = value_str.split()  # whitespace split
-    
+    parts = [part.strip() for part in value_str.split(sep)]
     return [part for part in parts if part]
 
 # ------------------------------
@@ -246,6 +245,7 @@ try:
     cur.execute(f"""
     CREATE TABLE IF NOT EXISTS {schema_name}.{table_name} (
         id SERIAL PRIMARY KEY,
+        _submission_time TEXT UNIQUE,
         start TIMESTAMP,
         "end" TIMESTAMP,
         date DATE,
@@ -303,12 +303,31 @@ try:
     # ------------------------------
     insert_sql = f"""
     INSERT INTO {schema_name}.{table_name} (
+        _submission_time,
         start, "end", date, gender_id, age_group_id, education_id, country_id,
         heard_gender_inclusion, confidence_understanding, definition_equal_rights, definition_only_women,
         practiced_in_country, importance_in_society, personal_exclusion, witnessed_exclusion, barriers_exist,
         govt_create_policies, govt_provide_education, govt_support_groups, govt_equal_representation
     ) VALUES %s
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (_submission_time)
+    DO UPDATE SET
+        gender_id = EXCLUDED.gender_id,
+        age_group_id = EXCLUDED.age_group_id,
+        education_id = EXCLUDED.education_id,
+        country_id = EXCLUDED.country_id,
+        heard_gender_inclusion = EXCLUDED.heard_gender_inclusion,
+        confidence_understanding = EXCLUDED.confidence_understanding,
+        definition_equal_rights = EXCLUDED.definition_equal_rights,
+        definition_only_women = EXCLUDED.definition_only_women,
+        practiced_in_country = EXCLUDED.practiced_in_country,
+        importance_in_society = EXCLUDED.importance_in_society,
+        personal_exclusion = EXCLUDED.personal_exclusion,
+        witnessed_exclusion = EXCLUDED.witnessed_exclusion,
+        barriers_exist = EXCLUDED.barriers_exist,
+        govt_create_policies = EXCLUDED.govt_create_policies,
+        govt_provide_education = EXCLUDED.govt_provide_education,
+        govt_support_groups = EXCLUDED.govt_support_groups,
+        govt_equal_representation = EXCLUDED.govt_equal_representation;
     """
 
     # Function to map survey responses to lookup IDs
@@ -447,8 +466,15 @@ try:
                 except:
                     pass
                 return None
+            _submission_time = None
+            try:
+                if "_submission_time" in df.columns and pd.notna(row["_submission_time"]):
+                    _submission_time = pd.to_datetime(row["_submission_time"])
+            except:
+                pass
             
             record = (
+                _submission_time,
                 start, end, date,
                 safe_get_col("gender_id"), 
                 safe_get_col("age_group_id"), 
